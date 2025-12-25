@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/FoodMapIcon.png">
+    <title>Lunch/Dinner Map (Minimal)</title>
+
+    <!-- Material Symbols（variantは class で切り替える） -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Sharp:opsz,wght,FILL,GRAD@24,400,1,0" />
+
+    <style>
+        html, body {height: 100%; margin: 0;}
+        #map { height: 100%; width: 100%; }
+
+        /* Top status (conditions) */
+        .top-left {
+            position: absolute;
+            top: 10px; left: 10px;
+            background: rgba(255,255,255,0.95);
+            padding: 8px 10px;
+            border-radius: 12px;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
+            font-size: 13px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 5;
+            max-width: calc(100% - 20px);
+        }
+
+        /* Filter button: left-bottom */
+        .fab-left {
+            position: absolute;
+            left: 10px;
+            bottom: 70px; /* ★変更前90px */
+            z-index: 6;
+        }
+
+        .btn {
+            appearance: none;
+            border: 0;
+            background: rgba(255,255,255,0.95);
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            cursor: pointer;
+        }
+        .btn:active { transform: translateY(1px); }
+
+        /* Filter button color */
+        .btn-filter {background: #1a73e8; color: #fff;}
+        .btn-filter2 {background: #16c07f; color: #fff;}
+
+        /* Overlay */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 20;
+            display: none;
+        }
+        .overlay.open { display: block; }
+
+        .panel {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            max-height: 92vh;
+            background: #fff;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+            box-shadow: 0 -8px 30px rgba(0,0,0,0.25);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid #eee;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
+        }
+        .panel-title { font-size: 16px; font-weight: 700; }
+        .panel-count { font-size: 13px; color: #555; margin-left: 10px; }
+        .panel-close {
+            border: 0; background: transparent;
+            font-size: 22px; line-height: 1;
+            cursor: pointer;
+            padding: 6px 10px;
+        }
+
+        .panel-body {
+            padding: 14px;
+            overflow: auto;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif;
+        }
+
+        .section { margin-bottom: 14px; }
+        .label { font-size: 12px; color: #555; margin-bottom: 6px; }
+        .select, .radio-row, .chips, .range-wrap {
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        /* Genres */
+        .chip-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 10px;
+            border-radius: 999px;
+            border: 1px solid #ddd;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            user-select: none;
+        }
+        .chip input { transform: scale(1.05); }
+
+        /* Range (double) */
+        .range-wrap.disabled { opacity: 0.45; pointer-events: none; }
+        .range-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+        .range-head .value { font-size: 13px; color: #222; font-weight: 600; }
+        .range-head .hint { font-size: 12px; color: #666; }
+
+        .range-slider {
+            position: relative;
+            height: 36px;
+        }
+        .range-slider input[type="range"] {
+            position: absolute;
+            left: 0; right: 0;
+            top: 10px;
+            width: 100%;
+            pointer-events: none;
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent;
+            margin: 0;
+            z-index: 2;
+        }
+        .range-slider input[type="range"]::-webkit-slider-thumb {
+            pointer-events: auto;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 18px; width: 18px;
+            border-radius: 50%;
+            background: #1a73e8;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+        .range-slider input[type="range"]::-webkit-slider-runnable-track {
+            height: 4px;
+            background: transparent;
+            border-radius: 999px;
+        }
+        .range-slider input[type="range"]::-moz-range-track{
+            height:4px;
+            background: transparent;
+            border-radius:999px;
+        }
+        .range-slider input[type="range"]::-moz-range-thumb{
+            height:18px; width:18px;
+            border-radius:50%;
+            background:#1a73e8;
+            border:2px solid #fff;
+        }
+        .range-slider .track {
+            position: absolute;
+            left: 0; right: 0;
+            top: 10px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 999px;
+            z-index: 1;
+        }
+        .range-slider .track .range {
+            position: absolute;
+            top: 0;
+            height: 4px;
+            border-radius: 999px;
+            background: #1a73e8;
+        }
+        .radio-row label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .panel-footer {
+            display: flex;
+            gap: 10px;
+            padding: 12px 14px;
+            border-top: 1px solid #eee;
+            background: #fff;
+        }
+        .btn-secondary {
+            flex: 1;
+            background: #f1f3f4;
+            box-shadow: none;
+            border: 1px solid #e5e7e9;
+        }
+        .btn-primary {
+            flex: 1;
+            background: #1a73e8;
+            color: #fff;
+            box-shadow: none;
+        }
+
+        .error {
+            color: #b00020;
+            white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        /* Material Symbols base */
+        .ms-outlined { font-family: "Material Symbols Outlined"; }
+        .ms-rounded  { font-family: "Material Symbols Rounded"; }
+        .ms-sharp    { font-family: "Material Symbols Sharp"; }
+        .ms {
+            font-weight: 400;
+            font-style: normal;
+            font-size: 18px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+            font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
+        }
+        .pin-shadow{filter:drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));}
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <!-- 条件表示（上） -->
+    <div class="top-left" id="statusTop">条件: -</div>
+
+    <!-- フィルターボタン（左下） -->
+    <div class="fab-left">
+        <button class="btn btn-filter" id="btnOpen">フィルター設定</button>
+        <div style="height:8px"></div>
+        <button class="btn btn-filter2" id="btnWalk">徒歩圏表示</button>
+    </div>
+
+    <!-- Filter Overlay -->
+    <div class="overlay" id="overlay">
+        <div class="panel" role="dialog" aria-modal="true">
+            <div class="panel-header">
+                <div style="display:flex;align-items:baseline;gap:10px;">
+                    <div class="panel-title">フィルター設定</div>
+                    <div class="panel-count" id="panelCount">0件</div>
+                </div>
+                <button class="panel-close" id="btnClose" aria-label="閉じる">×</button>
+            </div>
+
+            <div class="panel-body">
+                <!-- 用途：昼/夜チェックボックス -->
+                <div class="section">
+                    <div class="label">用途</div>
+                    <div class="radio-row">
+                        <label><input type="checkbox" id="purposeLunch" checked> 昼</label>
+                        <label><input type="checkbox" id="purposeDinner" checked> 夜</label>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="label">ジャンル（複数選択・OR一致）</div>
+                    <div class="chips">
+                        <input
+                            type="text"
+                            id="genreSearch"
+                            placeholder="ジャンル検索（部分一致）"
+                            style="
+                                width:100%;
+                                box-sizing:border-box;
+                                margin-bottom:8px;
+                                padding:8px 10px;
+                                border-radius:10px;
+                                border:1px solid #ddd;
+                                font-size:13px;
+                            "
+                        >
+                        <div class="chip-grid" id="genreChips"></div>
+                        <div class="error" id="genreErr" style="display:none;"></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="label">人数（整数レンジ）</div>
+                    <div class="range-wrap" id="peopleWrap">
+                        <div class="range-head">
+                            <div class="value" id="peopleValue">-</div>
+                            <div class="hint">min/max</div>
+                        </div>
+                        <div class="range-slider">
+                            <div class="track"><div class="range" id="peopleRange"></div></div>
+                            <input id="peopleMin" type="range" min="0" max="10" step="1" value="0">
+                            <input id="peopleMax" type="range" min="0" max="10" step="1" value="10">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="label">予算（昼）（整数レンジ）</div>
+                    <div class="range-wrap" id="lunchWrap">
+                        <div class="range-head">
+                            <div class="value" id="lunchValue">-</div>
+                            <div class="hint">min/max</div>
+                        </div>
+                        <div class="range-slider">
+                            <div class="track"><div class="range" id="lunchRange"></div></div>
+                            <input id="lunchMin" type="range" min="0" max="5000" step="100" value="0">
+                            <input id="lunchMax" type="range" min="0" max="5000" step="100" value="5000">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="label">予算（夜）（整数レンジ）</div>
+                    <div class="range-wrap" id="dinnerWrap">
+                        <div class="range-head">
+                            <div class="value" id="dinnerValue">-</div>
+                            <div class="hint">min/max</div>
+                        </div>
+                        <div class="range-slider">
+                            <div class="track"><div class="range" id="dinnerRange"></div></div>
+                            <input id="dinnerMin" type="range" min="0" max="20000" step="500" value="0">
+                            <input id="dinnerMax" type="range" min="0" max="20000" step="500" value="20000">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="label">訪問有無</div>
+                    <div class="radio-row">
+                        <label><input type="radio" name="visit" value="ALL" checked> 全て</label>
+                        <label><input type="radio" name="visit" value="WANT"> 行ってみたい</label>
+                        <label><input type="radio" name="visit" value="VISITED"> 行ったことある</label>
+                    </div>
+                </div>
+
+                <div class="error" id="errBox" style="display:none;"></div>
+            </div>
+
+            <div class="panel-footer">
+                <button class="btn btn-secondary" id="btnReset">リセット</button>
+                <button class="btn btn-primary" id="btnApply">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ★ここを自分のものに変更（AppScriptデプロイ毎にWEB_APP_URL変更要）
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxA-8MMOPxjzm4xG097rAU1JZGgm4twOAxztpESARfWIu6wtSJ9D4imUAsR3A1GmUf-GA/exec"; // 例: https://script.google.com/macros/s/.../exec
+    const MAPS_API_KEY = "AIzaSyAJq4mIjWxYuiXQpsRq9j1Ln-Op04DxH9A";
+
+    // ---- Visit colors (2色のみ) ----
+    const VISIT_STYLE = {
+      VISITED: { bg: "#d93025", glyph: "#ffffff" }, // 濃
+      OTHER:   { bg: "#f28b82", glyph: "#ffffff" }, // 淡
+    };
+
+    // ---- default icon fallback ----
+    const DEFAULT_SYMBOL = "restaurant";
+    const DEFAULT_VARIANT = "outlined"; // outlined / rounded / sharp
+
+    // --- Marker style config (任意変更しやすいよう外出し) ---
+
+    // --- State ---
+    const state = {
+      purposeLunch: true,
+      purposeDinner: true,
+      selectedGenres: [],
+      peopleMin: 0, peopleMax: 100, //★変更前10
+      lunchBudgetMin: 0, lunchBudgetMax: 10000,  //★変更前5000
+      dinnerBudgetMin: 0, dinnerBudgetMax: 20000,
+      visit: "ALL" // ALL | WANT | VISITED
+    };
+
+    // --- Map/Data ---
+    let map;
+    let infoWindow;
+    let shops = [];
+    // Advanced marker classes（initApp内でimport）
+    let AdvancedMarkerElement, PinElement;
+    /** markersById: id => google.maps.Marker */
+    const markersById = new Map();
+     // Tag config from TagList: tag -> {priority, symbol, variant}
+    const tagConfig = new Map();
+    let allGenreLabels = [];
+
+    /** global numeric ranges from data (for reset, slider max/min) */
+    const ranges = {
+      people: { min: 0, max: 100, step: 1 },//★変更前max10
+      lunch: { min: 0, max: 10000, step: 100 },//★変更前max5000
+      dinner:{ min: 0, max: 20000, step: 100 },//★変更前step500
+    };
+
+    // ---- Walk rings ----
+    let walkPolys = [];          // 5/10/15分のPolygonを入れる
+    let walkVisible = false;     // 初期は非表示
+    let walkLoaded = false;
+    let walkRings = null; // {5:[{lat,lng}],10:[...],15:[...]}
+    async function fetchWalkRingsOnce() {
+        if (walkLoaded && walkRings) return walkRings;
+        const res = await fetchJson(`${WEB_APP_URL}?mode=walkrings`);
+        if (!res || res.ok !== true) throw new Error("walkrings取得失敗");
+        walkRings = res.rings || { 5: [], 10: [], 15: [] };
+        walkLoaded = true;
+        return walkRings;
+    }
+        function closeRing(path) {
+        if (!Array.isArray(path) || path.length < 3) return [];
+        const first = path[0];
+        const last = path[path.length - 1];
+        if (first.lat === last.lat && first.lng === last.lng) return path;
+        return path.concat([first]);
+    }
+    function clearWalkPolys() {
+        for (const p of walkPolys) p.setMap(null);
+        walkPolys = [];
+    }
+    const ringStyleByMins = {
+        5:  { fillColor: "#79df4a", fillOpacity: 0.28 },
+        10: { fillColor: "#f7ec58", fillOpacity: 0.18 },
+        15: { fillColor: "#ff5656", fillOpacity: 0.08 },
+    };
+    function buildWalkPolysFromRings(rings) {
+        clearWalkPolys();
+        for (const mins of [5, 10, 15]) {
+            const raw = Array.isArray(rings[mins]) ? rings[mins] : [];
+            if (raw.length < 3) continue;
+            const style = ringStyleByMins[mins] || { fillColor: "#1a73e8", fillOpacity: 0.2 };
+            const poly = new google.maps.Polygon({
+                paths: closeRing(raw),
+                fillColor: style.fillColor,
+                fillOpacity: style.fillOpacity,
+                strokeOpacity: 0,
+                strokeWeight: 0,
+                clickable: false,
+                zIndex: (100-mins),
+            });
+            walkPolys.push(poly);
+        }
+    }
+    function setWalkVisible(v) {
+        walkVisible = !!v;
+        for (const p of walkPolys) p.setMap(walkVisible ? map : null);
+    }
+    async function toggleWalk() {
+        if (!walkLoaded) {
+            setTopStatus("徒歩圏データ取得中...");
+            const rings = await fetchWalkRingsOnce();
+            buildWalkPolysFromRings(rings);
+            setTopStatus(""); // 必要なら表示を戻す
+        }
+        setWalkVisible(!walkVisible);
+        const btn = document.getElementById("btnWalk");
+        if (btn) btn.textContent = walkVisible ? "徒歩圏:ON" : "徒歩圏:OFF";
+        updateMarkers();
+    }
+
+    
+    // ---------- Utils ----------
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function setTopStatus(text) {
+      document.getElementById("statusTop").textContent = text;
+    }
+
+    function updateRangeBar(minEl, maxEl, barEl) {
+        const min = Number(minEl.min);
+        const max = Number(minEl.max);
+        const minV = Number(minEl.value);
+        const maxV = Number(maxEl.value);
+        const total = (max - min) || 1;
+        const leftPct = ((minV - min) / total) * 100;
+        const rightPct = ((maxV - min) / total) * 100;
+        barEl.style.left = `${leftPct}%`;
+        barEl.style.width = `${Math.max(0, rightPct - leftPct)}%`;
+    }
+
+    function parseGenres(genreRaw) {
+      if (!genreRaw) return [];
+      return String(genreRaw).split(",").map(s => s.trim()).filter(Boolean);
+    }
+
+    function normalizeVisit(visitedRaw) {
+      const v = String(visitedRaw ?? "").trim();
+      if (!v) return null;
+      if (v === "行ってみたい") return "WANT";
+      if (v === "行ったことある") return "VISITED";
+      return null;
+    }
+
+    function toNum(v) {
+      if (v === null || v === undefined || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function toInt(v) {
+      if (v === null || v === undefined || v === "") return null;
+      const n = parseInt(String(v), 10);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      return await res.json();
+    }
+
+    function computeRangesFromData(shops) {
+      const peopleVals = shops.map(s => s.people).filter(v => v != null);
+      const lunchVals  = shops.map(s => s.lunchBudget).filter(v => v != null);
+      const dinnerVals = shops.map(s => s.dinnerBudget).filter(v => v != null);
+
+      if (peopleVals.length) {
+        ranges.people.min = Math.min(...peopleVals);
+        ranges.people.max = Math.max(...peopleVals);
+        ranges.people.step = 1;
+      }
+      if (lunchVals.length) {
+        ranges.lunch.min = Math.min(...lunchVals);
+        ranges.lunch.max = Math.max(...lunchVals);
+        ranges.lunch.step = 100;
+      }
+      if (dinnerVals.length) {
+        ranges.dinner.min = Math.min(...dinnerVals);
+        ranges.dinner.max = Math.max(...dinnerVals);
+        ranges.dinner.step = 100;//★変更前500
+      }
+
+      if (ranges.people.min === ranges.people.max) ranges.people.max = ranges.people.min + 1;
+      if (ranges.lunch.min === ranges.lunch.max)   ranges.lunch.max  = ranges.lunch.min + 100;
+      if (ranges.dinner.min === ranges.dinner.max) ranges.dinner.max = ranges.dinner.min + 500;
+    }
+
+    function formatRange(min, max, prefix="") {
+      if (min === max) return `${prefix}${min}`;
+      return `${prefix}${min} - ${prefix}${max}`;
+    }
+
+    // ---- Material glyph element ----
+    function makeMaterialGlyph(symbolName, variant, color) {
+      const span = document.createElement("span");
+      const v = (variant || DEFAULT_VARIANT).toLowerCase();
+      const cls = (v === "rounded") ? "ms-rounded" : (v === "sharp") ? "ms-sharp" : "ms-outlined";
+      span.className = `ms ${cls}`;
+      span.textContent = symbolName || DEFAULT_SYMBOL;
+      span.style.color = color || "#fff";
+      return span;
+    }
+
+    // ---- Pick best tag icon by priority (not first genre) ----
+    function pickBestTagConfig(shop) {
+      let best = null; // {priority, symbol, variant}
+      for (const g of shop.genres) {
+        const cfg = tagConfig.get(g);
+        if (!cfg) continue;
+        if (!best || cfg.priority < best.priority) best = cfg;
+      }
+      return best; // null allowed
+    }
+    function getVisitStyle(shop) {
+      if (shop.visit === "VISITED") return VISIT_STYLE.VISITED;
+      return VISIT_STYLE.OTHER;
+    }
+
+
+    // ---------- InfoWindow ----------
+    function makeInfoContent(shop) {
+      const name = escapeHtml(shop.name || "");
+      const genresHtml = escapeHtml((shop.genres || []).join(", "));
+      const url = shop.gmapUrl ? String(shop.gmapUrl) : "";
+      const linkHtml = url
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Google Mapsで開く</a>`
+        : `<span style="color:#777">リンクなし</span>`;
+
+      return `
+        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans JP',sans-serif;font-size:14px;line-height:1.35">
+          <div style="font-weight:700;font-size:15px;margin-bottom:4px">${name}</div>
+          <div style="color:#444;margin-bottom:6px">${genresHtml}</div>
+          <div>${linkHtml}</div>
+        </div>`;
+    }
+
+    // ---------- Filtering ----------
+    function matchShop(shop) {
+      // 1) purpose (昼/夜チェック仕様)
+      const wantLunch  = !!state.purposeLunch;
+      const wantDinner = !!state.purposeDinner;
+
+      // 昼+夜ON => 用途で絞らない（＝全て表示）
+      if (!(wantLunch && wantDinner)) {
+        const sp = shop.purpose; // Lunch | Dinner | Lunch+Dinner
+        let ok = true;
+        if (wantLunch && !wantDinner) ok = (sp === "Lunch" || sp === "Lunch+Dinner");
+        else if (!wantLunch && wantDinner) ok = (sp === "Dinner" || sp === "Lunch+Dinner");
+        else ok = false;// 両方OFF => 0件
+        if (!ok) return false;
+      }
+
+      // 2) genres OR (selectedGenres empty => OK)
+      if (state.selectedGenres.length > 0) {
+        let hit = false;
+        for (const g of state.selectedGenres) {
+          if (shop.genresSet.has(g)) { hit = true; break; }
+        }
+        if (!hit) return false;
+      }
+
+      // 3) people range (null => ignore)
+      if (shop.people != null) {
+        if (shop.people < state.peopleMin || shop.people > state.peopleMax) return false;
+      }
+
+      // 4) budgets (チェックOFF側は無視)
+      if (state.purposeLunch && shop.lunchBudget != null) {
+        if (shop.lunchBudget < state.lunchBudgetMin || shop.lunchBudget > state.lunchBudgetMax) return false;
+      }
+      if (state.purposeDinner && shop.dinnerBudget != null) {
+        if (shop.dinnerBudget < state.dinnerBudgetMin || shop.dinnerBudget > state.dinnerBudgetMax) return false;
+      }
+
+      // 5) visit (3択)
+      if (state.visit !== "ALL") {
+        if (shop.visit !== state.visit) return false;
+      }
+
+      return true;
+    }
+
+    function getFilteredShops() {
+      return shops.filter(s => s.lat != null && s.lng != null).filter(matchShop);
+    }
+
+    // ---- Advanced markers ----
+    function ensureMarker(shop) {
+      const id = shop.id;
+      if (markersById.has(id)) return markersById.get(id);
+      const visitStyle = getVisitStyle(shop);
+      const best = pickBestTagConfig(shop);
+      const symbolName = (best && best.symbol) ? best.symbol : DEFAULT_SYMBOL;
+      const variant = (best && best.variant) ? best.variant : DEFAULT_VARIANT;
+      const glyphEl = makeMaterialGlyph(symbolName, variant, visitStyle.glyph);
+      const pin = new PinElement({
+        background: visitStyle.bg,
+        borderColor: visitStyle.bg,
+        glyphColor: visitStyle.glyph,
+        glyph: glyphEl,
+        scale: 1.12,
+      });
+      pin.element.classList.add("pin-shadow");
+      const marker = new AdvancedMarkerElement({
+        map,
+        position: { lat: shop.lat, lng: shop.lng },
+        title: shop.name || "",
+        content: pin.element,
+      });
+      marker.addListener("click", () => {
+        infoWindow.setContent(makeInfoContent(shop));
+        infoWindow.open({ anchor: marker, map });
+      });
+      markersById.set(id, marker);
+      return marker;
+    }
+    function updateMarkers() {
+      const filtered = getFilteredShops();
+      const visibleIds = new Set(filtered.map(s => s.id));
+      for (const shop of filtered) {
+        const marker = ensureMarker(shop);
+        if (marker.map == null) marker.map = map;
+      }
+      for (const [id, marker] of markersById.entries()) {
+        if (!visibleIds.has(id)) marker.map = null;
+      }
+      document.getElementById("panelCount").textContent = `${filtered.length}件`;
+      document.getElementById("statusTop").textContent =
+        `条件: ${buildSummaryText()} / 表示中: ${filtered.length}件（全 ${shops.length}件）`;
+    }
+
+    // ---------- UI bindings ----------
+    function buildSummaryText() {
+      const parts = [];
+      // 用途表示
+      if (state.purposeLunch && state.purposeDinner) parts.push("昼+夜");
+      else if (state.purposeLunch) parts.push("昼");
+      else if (state.purposeDinner) parts.push("夜");
+      else parts.push("用途なし");
+      if (state.selectedGenres.length > 0) parts.push(state.selectedGenres.join(","));
+      parts.push(`${state.peopleMin}-${state.peopleMax}人`);
+      if (state.purposeLunch)  parts.push(`昼¥${state.lunchBudgetMin}-¥${state.lunchBudgetMax}`);
+      if (state.purposeDinner) parts.push(`夜¥${state.dinnerBudgetMin}-¥${state.dinnerBudgetMax}`);
+      if (state.visit === "WANT") parts.push("行ってみたい");
+      else if (state.visit === "VISITED") parts.push("行ったことある");
+      else parts.push("訪問:全て");
+      return parts.join(" / ");
+    }
+
+    function clampMinMax(minEl, maxEl) {
+      let minV = parseInt(minEl.value, 10);
+      let maxV = parseInt(maxEl.value, 10);
+      if (minV > maxV) {
+        minV = maxV;
+        minEl.value = String(minV);
+      }
+      return { minV, maxV };
+    }
+
+    function setRangeInputs(idMin, idMax, r) {
+      const minEl = document.getElementById(idMin);
+      const maxEl = document.getElementById(idMax);
+      minEl.min = String(r.min); minEl.max = String(r.max); minEl.step = String(r.step);
+      maxEl.min = String(r.min); maxEl.max = String(r.max); maxEl.step = String(r.step);
+      minEl.value = String(r.min);
+      maxEl.value = String(r.max);
+    }
+
+    function refreshRangeLabels() {
+      document.getElementById("peopleValue").textContent = formatRange(state.peopleMin, state.peopleMax, "");
+      document.getElementById("lunchValue").textContent = formatRange(state.lunchBudgetMin, state.lunchBudgetMax, "¥");
+      document.getElementById("dinnerValue").textContent = formatRange(state.dinnerBudgetMin, state.dinnerBudgetMax, "¥");
+      updateRangeBar(document.getElementById("peopleMin"),document.getElementById("peopleMax"),document.getElementById("peopleRange"));
+      updateRangeBar(document.getElementById("lunchMin"),document.getElementById("lunchMax"),document.getElementById("lunchRange"));
+      updateRangeBar(document.getElementById("dinnerMin"),document.getElementById("dinnerMax"),document.getElementById("dinnerRange"));
+    }
+
+    function applyBudgetEnableByPurpose() {
+      const lunchWrap = document.getElementById("lunchWrap");
+      const dinnerWrap = document.getElementById("dinnerWrap");
+      const lunchDisabled = !state.purposeLunch;
+      const dinnerDisabled = !state.purposeDinner;
+      lunchWrap.classList.toggle("disabled", lunchDisabled);
+      dinnerWrap.classList.toggle("disabled", dinnerDisabled);
+      for (const id of ["lunchMin","lunchMax"]) document.getElementById(id).disabled = lunchDisabled;
+      for (const id of ["dinnerMin","dinnerMax"]) document.getElementById(id).disabled = dinnerDisabled;
+    }
+
+    function resetStateToDefaults() {
+      state.purposeLunch = true;
+      state.purposeDinner = true;
+      state.selectedGenres = [];
+      state.peopleMin = ranges.people.min;
+      state.peopleMax = ranges.people.max;
+      state.lunchBudgetMin = ranges.lunch.min;
+      state.lunchBudgetMax = ranges.lunch.max;
+      state.dinnerBudgetMin = ranges.dinner.min;
+      state.dinnerBudgetMax = ranges.dinner.max;
+      state.visit = "ALL";
+    }
+
+    function syncUIFromState() {
+      document.getElementById("purposeLunch").checked = !!state.purposeLunch;
+      document.getElementById("purposeDinner").checked = !!state.purposeDinner;
+      document.querySelectorAll('#genreChips input[type="checkbox"]').forEach(cb => {
+        cb.checked = state.selectedGenres.includes(cb.value);
+      });
+      document.getElementById("peopleMin").value = String(state.peopleMin);
+      document.getElementById("peopleMax").value = String(state.peopleMax);
+      document.getElementById("lunchMin").value  = String(state.lunchBudgetMin);
+      document.getElementById("lunchMax").value  = String(state.lunchBudgetMax);
+      document.getElementById("dinnerMin").value = String(state.dinnerBudgetMin);
+      document.getElementById("dinnerMax").value = String(state.dinnerBudgetMax);
+      document.querySelectorAll('input[name="visit"]').forEach(r => r.checked = (r.value === state.visit));
+      applyBudgetEnableByPurpose();
+      refreshRangeLabels();
+    }
+
+    function readStateFromUI() {
+      state.purposeLunch  = document.getElementById("purposeLunch").checked;
+      state.purposeDinner = document.getElementById("purposeDinner").checked;
+
+      const selected = [];
+      document.querySelectorAll('#genreChips input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) selected.push(cb.value);
+      });
+      state.selectedGenres = selected;
+
+      const p = clampMinMax(document.getElementById("peopleMin"), document.getElementById("peopleMax"));
+      state.peopleMin = p.minV; state.peopleMax = p.maxV;
+
+      const l = clampMinMax(document.getElementById("lunchMin"), document.getElementById("lunchMax"));
+      state.lunchBudgetMin = l.minV; state.lunchBudgetMax = l.maxV;
+
+      const d = clampMinMax(document.getElementById("dinnerMin"), document.getElementById("dinnerMax"));
+      state.dinnerBudgetMin = d.minV; state.dinnerBudgetMax = d.maxV;
+
+      const v = document.querySelector('input[name="visit"]:checked');
+      state.visit = v ? v.value : "ALL";
+
+      applyBudgetEnableByPurpose();
+      refreshRangeLabels();
+    }
+
+    function bindUI() {
+      const overlay = document.getElementById("overlay");
+      document.getElementById("btnOpen").addEventListener("click", () => overlay.classList.add("open"));
+      document.getElementById("btnClose").addEventListener("click", () => overlay.classList.remove("open"));
+      document.getElementById("btnApply").addEventListener("click", () => overlay.classList.remove("open"));
+      document.getElementById("btnWalk").addEventListener("click", async () => {
+        try { await toggleWalk(); }
+        catch (e) { console.error(e); alert(String(e && e.message ? e.message : e)); }});
+
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) overlay.classList.remove("open");
+      });
+
+      // Purpose checkboxes
+      ["purposeLunch","purposeDinner"].forEach(id => {
+        document.getElementById(id).addEventListener("change", () => {
+          readStateFromUI();
+          updateMarkers();
+        });
+      });
+
+      // Visit radios
+      document.querySelectorAll('input[name="visit"]').forEach(r => {
+        r.addEventListener("change", () => {
+          readStateFromUI();
+          updateMarkers();
+        });
+      });
+
+      // Range inputs
+      const rangeIds = ["peopleMin","peopleMax","lunchMin","lunchMax","dinnerMin","dinnerMax"];
+      rangeIds.forEach(id => {
+        document.getElementById(id).addEventListener("input", () => {
+          readStateFromUI();
+          updateMarkers();
+        });
+      });
+
+      // Reset
+      document.getElementById("btnReset").addEventListener("click", () => {
+        resetStateToDefaults();
+        syncUIFromState();
+        updateMarkers();
+      });
+      const genreSearch = document.getElementById("genreSearch");
+      if (genreSearch) {
+            genreSearch.addEventListener("input", () => {
+                const q = genreSearch.value.trim().toLowerCase();
+                for (const { tag, el } of allGenreLabels) {
+                    const hit = tag.toLowerCase().includes(q);
+                    el.style.display = hit ? "" : "none";
+                }
+            });
+        }
+    }
+
+    function renderGenreChips(tags) {
+        const root = document.getElementById("genreChips");
+        root.innerHTML = "";
+        allGenreLabels = [];
+        for (const t of tags) {
+            const label = document.createElement("label");
+            label.className = "chip";
+            label.dataset.tag = t;
+            label.innerHTML = `
+                <input type="checkbox" value="${escapeHtml(t)}">
+                <span>${escapeHtml(t)}</span>
+            `;
+            label.querySelector("input").addEventListener("change", () => {
+                readStateFromUI();
+                updateMarkers();
+            });
+            root.appendChild(label);
+            allGenreLabels.push({
+                tag: t,
+                el: label
+            });
+        }
+    }
+
+    function loadTagConfigFromApi(tagsObjList) {
+      tagConfig.clear();
+      for (const o of tagsObjList) {
+        const tag = String(o.tag ?? "").trim();
+        if (!tag) continue;
+        const pr = Number.isFinite(Number(o.priority)) ? parseInt(o.priority, 10) : 9999;
+        const symbol = o.symbol ? String(o.symbol).trim() : null;
+        const variant = o.variant ? String(o.variant).trim().toLowerCase() : null;
+        tagConfig.set(tag, { priority: pr, symbol, variant });
+      }
+    }
+
+    // ---------- App init ----------
+    async function initApp() {
+      try {
+        setTopStatus("データ取得中...");
+
+        // marker library import）
+        ({ AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker"));
+
+        const master = await fetchJson(`${WEB_APP_URL}?mode=master`);
+        if (!master || master.ok !== true) throw new Error("master取得失敗");
+
+        const tagsRes = await fetchJson(`${WEB_APP_URL}?mode=tags`);
+        if (!tagsRes || tagsRes.ok !== true) throw new Error("tags取得失敗");
+
+        // tag config
+        const tagObjs = Array.isArray(tagsRes.tags) ? tagsRes.tags : [];
+        loadTagConfigFromApi(tagObjs);
+
+        // tags for chips（有効なタグ名のみ）
+        const tagNames = tagObjs.map(o => String(o.tag ?? "").trim()).filter(Boolean);
+        renderGenreChips(tagNames);
+
+        // normalize shops
+        shops = (master.rows || []).map(r => {
+          const name = String(r.name ?? "").trim();
+          const lat = toNum(r.lat);
+          const lng = toNum(r.lng);
+          const purpose = String(r.purpose ?? "").trim();
+          const genres = parseGenres(r.genreRaw);
+          const people = toInt(r.people);
+          const lunchBudget = toInt(r.lunchBudget);
+          const dinnerBudget = toInt(r.dinnerBudget);
+          const visit = normalizeVisit(r.visitedRaw);
+          const gmapUrl = String(r.gmapUrl ?? "").trim();
+          const placeId = String(r.placeId ?? "").trim();
+          const id = placeId || `${name}|${lat}|${lng}`;
+          return {
+            id, name, lat, lng, purpose,
+            genres,
+            genresSet: new Set(genres),
+            people, lunchBudget, dinnerBudget,
+            visit,
+            gmapUrl,
+            memo: String(r.memo ?? "").trim(),
+          };
+        });
+
+        const first = shops.find(s => typeof s.lat === "number" && typeof s.lng === "number");
+        const center = first ? { lat: first.lat, lng: first.lng } : { lat: 35.17007666551046, lng: 136.9136461638344 };
+        map = new google.maps.Map(document.getElementById("map"), {
+          center,
+          zoom: 16,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          mapId:"48da810ffd595e60bd01d63f",
+        });
+
+        infoWindow = new google.maps.InfoWindow();
+
+        computeRangesFromData(shops);
+
+        setRangeInputs("peopleMin", "peopleMax", ranges.people);
+        setRangeInputs("lunchMin", "lunchMax", ranges.lunch);
+        setRangeInputs("dinnerMin","dinnerMax",ranges.dinner);
+
+        resetStateToDefaults();
+        bindUI();
+        syncUIFromState();
+
+        updateMarkers();
+        setWalkVisible(false);
+      } catch (err) {
+        console.error(err);
+        setTopStatus("エラー");
+        const box = document.getElementById("errBox");
+        box.style.display = "block";
+        box.textContent = String(err && err.stack ? err.stack : err);
+      }
+    }
+
+    // Google Maps JS 読み込み（callbackでinitApp）
+    function loadGoogleMaps() {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(MAPS_API_KEY)}&callback=__initMaps&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.onerror = () => {
+        setTopStatus("Maps API読込失敗");
+        const box = document.getElementById("errBox");
+        box.style.display = "block";
+        box.textContent = "Google Maps APIの読み込みに失敗しました。APIキーとリファラ設定を確認してください。";
+      };
+      document.head.appendChild(script);
+    }
+
+    window.__initMaps = () => initApp();
+    loadGoogleMaps();
+  </script>
+</body>
+</html>
